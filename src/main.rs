@@ -26,10 +26,16 @@ fn get_data() -> Result<Vec<char>, Box<dyn std::error::Error>> {
 fn main() {
     let mut tries: i8 = 0;
 
-    let mut word_of_the_day: Vec<char>;
+    let word_of_the_day: Vec<char> = match get_data() {
+        Ok(value) => value,
+        Err(err) => {
+            eprintln!("Error: {:?}", err);
+            std::process::exit(1);
+        }
+    };
 
-    match get_data() {
-        Ok(value) => println!("Values: {:?}", value),
-        Err(err) => println!("Error: {}", err),
-    }
+    println!(
+        "This is the word for the day: {:?}",
+        word_of_the_day.iter().collect::<String>()
+    );
 }
