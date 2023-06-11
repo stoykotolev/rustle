@@ -36,11 +36,6 @@ fn main() {
         }
     };
 
-    println!(
-        "This is the word for the day: {:?}",
-        word_of_the_day.iter().collect::<String>()
-    );
-
     while tries <= 5 {
         let mut input_string = String::new();
         let mut user_guess: [String; 5] = [
@@ -52,6 +47,11 @@ fn main() {
         ];
 
         io::stdin().read_line(&mut input_string).unwrap();
+
+        if input_string.trim() == word_of_the_day.iter().collect::<String>().trim() {
+            println!("You are correcto");
+            break;
+        }
 
         if input_string.trim().len() > 6 {
             println!("Please enter a 5 letter word");
@@ -72,7 +72,12 @@ fn main() {
                 }
             }
         }
+        println!("Guess: {}", user_guess.join("").trim());
+
         tries += 1;
     }
-    println!("almost");
+
+    if tries > 5 {
+        println!("almost");
+    }
 }
