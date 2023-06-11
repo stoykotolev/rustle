@@ -1,4 +1,5 @@
 use std::io;
+use std::process::Command;
 
 use chrono::Local;
 use serde::{Deserialize, Serialize};
@@ -24,7 +25,6 @@ fn get_data() -> Result<Vec<char>, Box<dyn std::error::Error>> {
     Ok(resp.solution.chars().collect::<Vec<char>>())
 }
 
-// let resp = reqwest::blocking::get("https://www.nytimes.com/svc/wordle/v2/2023-06-05.json")?
 fn main() {
     let mut tries: i8 = 1;
 
@@ -50,6 +50,10 @@ fn main() {
 
         if input_string.trim() == word_of_the_day.iter().collect::<String>().trim() {
             println!("You are correcto");
+            Command::new("open")
+                .arg("raycast://confetti")
+                .spawn()
+                .expect("The raycast confetti command to run");
             break;
         }
 
