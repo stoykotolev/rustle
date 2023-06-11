@@ -4,6 +4,10 @@ use std::process::Command;
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 
+use rodio::{source::Source, Decoder, OutputStream};
+use std::fs::File;
+use std::io::BufReader;
+
 #[derive(Debug, Serialize, Deserialize)]
 struct WordleData {
     id: i32,
@@ -36,6 +40,7 @@ fn main() {
         }
     };
 
+    println!("Please enter a 5 letter word: ");
     while tries <= 5 {
         let mut input_string = String::new();
         let mut user_guess: [String; 5] = [
@@ -54,10 +59,10 @@ fn main() {
                 .arg("raycast://confetti")
                 .spawn()
                 .expect("The raycast confetti command to run");
-            break;
+            std::process::exit(0);
         }
 
-        if input_string.trim().len() > 6 {
+        if input_string.trim().len() >= 6 {
             println!("Please enter a 5 letter word");
             continue;
         }
@@ -81,7 +86,20 @@ fn main() {
         tries += 1;
     }
 
-    if tries > 5 {
-        println!("almost");
-    }
+    println!("almost");
+    // Get a output stream handle to the default physical sound device
+    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+    // Load a sound from a file, using a path relative to Cargo.toml
+    let file = BufReader::new(File::open("./stupid.mp3").expect("The audio file to be present"));
+    // Decode that sound file into a source
+    let source = Decoder::new(file).unwrap();
+    // Play the sound directly on the device
+    stream_handle
+        .play_raw(source.convert_samples())
+        .expect("Failed to play file");
+    // match {
+    //     Err(e) => eprintln!("Err: {:?}", e),
+    //     _ => (),
+    // };
+    std::thread::sleep(std::time::Duration::from_secs(5));
 }
