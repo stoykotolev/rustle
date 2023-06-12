@@ -17,6 +17,24 @@ struct WordleData {
     editor: String,
 }
 
+fn fail_route() {
+    // Get a output stream handle to the default physical sound device
+    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+    // Load a sound from a file, using a path relative to Cargo.toml
+    let file = BufReader::new(File::open("./stupid.mp3").expect("The audio file to be present"));
+    // Decode that sound file into a source
+    let source = Decoder::new(file).unwrap();
+    // Play the sound directly on the device
+    stream_handle
+        .play_raw(source.convert_samples())
+        .expect("Failed to play file");
+    // match {
+    //     Err(e) => eprintln!("Err: {:?}", e),
+    //     _ => (),
+    // };
+    std::thread::sleep(std::time::Duration::from_secs(1));
+}
+
 fn get_data() -> Result<Vec<char>, Box<dyn std::error::Error>> {
     let current_date = Local::now().date_naive();
     let wordle_url = format!(
@@ -87,19 +105,5 @@ fn main() {
     }
 
     println!("almost");
-    // Get a output stream handle to the default physical sound device
-    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
-    // Load a sound from a file, using a path relative to Cargo.toml
-    let file = BufReader::new(File::open("./stupid.mp3").expect("The audio file to be present"));
-    // Decode that sound file into a source
-    let source = Decoder::new(file).unwrap();
-    // Play the sound directly on the device
-    stream_handle
-        .play_raw(source.convert_samples())
-        .expect("Failed to play file");
-    // match {
-    //     Err(e) => eprintln!("Err: {:?}", e),
-    //     _ => (),
-    // };
-    std::thread::sleep(std::time::Duration::from_secs(5));
+    fail_route();
 }
