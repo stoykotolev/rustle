@@ -76,7 +76,9 @@ fn main() {
             Command::new("open")
                 .arg("raycast://confetti")
                 .spawn()
-                .expect("The raycast confetti command to run");
+                .expect(
+                "You should have Raycast... But congratulations I guess. Download Raycast though.",
+            );
             std::process::exit(0);
         }
 
