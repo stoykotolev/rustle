@@ -47,18 +47,11 @@ fn get_data() -> Result<Vec<char>, Box<dyn std::error::Error>> {
     Ok(resp.solution.chars().collect::<Vec<char>>())
 }
 
-fn main() {
+fn start_game(word: Vec<char>) {
     let mut tries: i8 = 1;
 
-    let word_of_the_day: Vec<char> = match get_data() {
-        Ok(value) => value,
-        Err(err) => {
-            eprintln!("Error: {:?}", err);
-            std::process::exit(1);
-        }
-    };
-
     println!("Please enter a 5 letter word: ");
+
     while tries <= 5 {
         let mut input_string = String::new();
         let mut user_guess: [String; 5] = [
@@ -71,7 +64,7 @@ fn main() {
 
         io::stdin().read_line(&mut input_string).unwrap();
 
-        if input_string.trim() == word_of_the_day.iter().collect::<String>().trim() {
+        if input_string.trim() == word.iter().collect::<String>().trim() {
             println!("You are correcto");
             Command::new("open")
                 .arg("raycast://confetti")
@@ -93,8 +86,8 @@ fn main() {
         }
 
         for (index, char) in input_string.chars().enumerate() {
-            if word_of_the_day.contains(&char) {
-                if word_of_the_day[index] == char {
+            if word.contains(&char) {
+                if word[index] == char {
                     user_guess[index] = format!("\x1b[1;32m{}\x1b[0m", char);
                 } else {
                     user_guess[index] = format!("\x1b[0;33m{}\x1b[0m", char)
@@ -108,4 +101,16 @@ fn main() {
 
     println!("almost");
     fail_route();
+}
+
+fn main() {
+    let word_of_the_day: Vec<char> = match get_data() {
+        Ok(value) => value,
+        Err(err) => {
+            eprintln!("Error: {:?}", err);
+            std::process::exit(1);
+        }
+    };
+
+    start_game(word_of_the_day);
 }
