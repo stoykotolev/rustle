@@ -9,12 +9,8 @@ use std::fs::File;
 use std::io::BufReader;
 
 #[derive(Debug, Serialize, Deserialize)]
-struct WordleData {
-    id: i32,
-    solution: String,
-    print_date: String,
-    days_since_launch: i32,
-    editor: String,
+struct WordleData<'a> {
+    solution: &'a str,
 }
 
 fn fail_route() {
@@ -35,16 +31,23 @@ fn fail_route() {
     std::thread::sleep(std::time::Duration::from_secs(1));
 }
 
-fn get_data() -> Result<Vec<char>, Box<dyn std::error::Error>> {
+fn get_data() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let current_date = Local::now().date_naive();
     let wordle_url = format!(
         "https://www.nytimes.com/svc/wordle/v2/{}.json",
         current_date
     );
 
-    let resp = reqwest::blocking::get(wordle_url)?.json::<WordleData>()?;
+    let resp = reqwest::blocking::get(wordle_url)?.bytes()?;
 
-    Ok(resp.solution.chars().collect::<Vec<char>>())
+    Ok(resp.to_vec())
+}
+
+fn get_word<'a>(bytes: &'a [u8]) -> Result<WordleData<'a>, Box<dyn std::error::Error>> {
+    let data = std::str::from_utf8(&bytes)?;
+    let word = serde_json::from_str::<WordleData>(&data)?;
+
+    Ok(word)
 }
 
 fn start_game(word: Vec<char>) {
@@ -54,13 +57,6 @@ fn start_game(word: Vec<char>) {
 
     while tries <= 5 {
         let mut input_string = String::new();
-        let mut user_guess: [String; 5] = [
-            String::from("_"),
-            String::from("_"),
-            String::from("_"),
-            String::from("_"),
-            String::from("_"),
-        ];
 
         io::stdin().read_line(&mut input_string).unwrap();
 
@@ -68,33 +64,34 @@ fn start_game(word: Vec<char>) {
             println!("You are correcto");
             Command::new("open")
                 .arg("raycast://confetti")
+                .stderr(std::process::Stdio::null())
                 .spawn()
                 .expect(
                 "You should have Raycast... But congratulations I guess. Download Raycast though.",
             );
-            std::process::exit(0);
+            std::process::exit(1);
         }
 
-        if input_string.trim().len() >= 6 {
-            println!("Please enter a 5 letter word");
-            continue;
-        }
-
-        if input_string.trim().len() < 5 {
+        if input_string.trim().len() != 5 {
             println!("Please enter a 5 letter word");
             continue;
         }
 
         for (index, char) in input_string.chars().enumerate() {
+            if index >= 5 {
+                break;
+            }
             if word.contains(&char) {
                 if word[index] == char {
-                    user_guess[index] = format!("\x1b[1;32m{}\x1b[0m", char);
+                    print!("\x1b[1;32m{}\x1b[0m", char);
                 } else {
-                    user_guess[index] = format!("\x1b[0;33m{}\x1b[0m", char)
+                    print!("\x1b[0;33m{}\x1b[0m", char)
                 }
+                continue;
             }
+            print!("_")
         }
-        println!("Guess: {}", user_guess.join("").trim());
+        println!();
 
         tries += 1;
     }
@@ -104,8 +101,15 @@ fn start_game(word: Vec<char>) {
 }
 
 fn main() {
-    let word_of_the_day: Vec<char> = match get_data() {
+    let bytes = match get_data() {
         Ok(value) => value,
+        Err(err) => {
+            eprintln!("Error: {:?}", err);
+            std::process::exit(1);
+        }
+    };
+    let word_of_the_day: Vec<char> = match get_word(&bytes) {
+        Ok(value) => value.solution.chars().collect::<Vec<char>>(),
         Err(err) => {
             eprintln!("Error: {:?}", err);
             std::process::exit(1);
