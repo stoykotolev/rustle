@@ -89,7 +89,7 @@ fn start_game(word: Vec<char>) {
                 }
                 continue;
             }
-            print!("_")
+            print!("\x1b[1;30m{}\x1b[0m", char)
         }
         println!();
 
