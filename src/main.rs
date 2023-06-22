@@ -26,10 +26,6 @@ fn fail_route() {
     stream_handle
         .play_raw(source.convert_samples())
         .expect("Failed to play file");
-    // match {
-    //     Err(e) => eprintln!("Err: {:?}", e),
-    //     _ => (),
-    // };
     std::thread::sleep(std::time::Duration::from_secs(1));
 }
 
