@@ -22,3 +22,4 @@ will build the project and start it
 - [ ] Add a check to see if you have already solved the word for this day
 - [ ] Maybe add a tracker of how much correct guesses, etc. like with the original game
 - [ ] Better error handling
+- [ ] Write tests

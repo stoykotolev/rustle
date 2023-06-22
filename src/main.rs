@@ -13,8 +13,6 @@ struct WordleData<'a> {
     solution: &'a str,
 }
 
-const INITIAL_VALUE: String = String::new();
-
 fn fail_route() {
     // Get a output stream handle to the default physical sound device
     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
@@ -75,7 +73,6 @@ fn start_game(word: Vec<char>) {
             println!("Please enter a 5 letter word");
             continue;
         }
-        let mut colored_guess: [String; 5] = [INITIAL_VALUE; 5];
 
         for (i, c) in input_string.chars().enumerate() {
             if i >= 5 {
@@ -84,21 +81,21 @@ fn start_game(word: Vec<char>) {
 
             let target_char = curr_try.get(i).unwrap();
             if c == *target_char {
-                colored_guess[i] = format!("\x1b[1;32m{}\x1b[0m", c);
+                print!("\x1b[1;32m{}\x1b[0m", c);
                 curr_try[i] = '\0';
             } else if word.contains(&c)
                 && word.contains(&c)
                 && input_string.chars().filter(|&x| x == c).count()
                     <= word.iter().filter(|&&x| x == c).count()
             {
-                colored_guess[i] = format!("\x1b[0;33m{}\x1b[0m", c);
+                print!("\x1b[0;33m{}\x1b[0m", c);
                 curr_try[i] = '\0';
             } else {
-                colored_guess[i] = format!("\x1b[0;37m{}\x1b[0m", c);
+                print!("\x1b[0;37m{}\x1b[0m", c);
             }
         }
 
-        println!("{}", colored_guess.join(""));
+        println!();
         tries += 1;
     }
 
