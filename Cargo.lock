@@ -1106,17 +1106,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rordle"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "reqwest",
- "rodio",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1143,6 +1132,17 @@ dependencies = [
  "libc",
  "linux-raw-sys",
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "rustle"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "reqwest",
+ "rodio",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

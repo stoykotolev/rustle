@@ -1,11 +1,10 @@
-use std::io;
+use std::io::{self, Cursor};
 use std::process::Command;
 
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 
 use rodio::{source::Source, Decoder, OutputStream};
-use std::fs::File;
 use std::io::BufReader;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -16,10 +15,17 @@ struct WordleData<'a> {
 fn fail_route() {
     // Get a output stream handle to the default physical sound device
     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
-    // Load a sound from a file, using a path relative to Cargo.toml
-    let file = BufReader::new(File::open("./stupid.mp3").expect("The audio file to be present"));
+
+    // Load the audio file at compile time as bytes,
+    // to be able to use regardless of current
+    // directory
+    let audio_file = include_bytes!("../assets/stupid.mp3");
+    let audio_cursor = Cursor::new(audio_file);
+    let audio_buffer = BufReader::new(audio_cursor);
+
     // Decode that sound file into a source
-    let source = Decoder::new(file).unwrap();
+    let source = Decoder::new(audio_buffer).unwrap();
+
     // Play the sound directly on the device
     stream_handle
         .play_raw(source.convert_samples())
