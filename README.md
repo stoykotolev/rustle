@@ -23,3 +23,4 @@ will build the project and start it
 - [ ] Maybe add a tracker of how much correct guesses, etc. like with the original game
 - [ ] Better error handling
 - [ ] Write tests
+- [ ] Fix a bug where duplicate letters in the word aren't colored.
