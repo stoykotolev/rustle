@@ -59,7 +59,7 @@ pub fn start_game(word: Vec<char>) {
 
     while tries <= 5 {
         let mut input_string = String::new();
-        let mut curr_try = word.clone();
+        let curr_try = word.clone();
 
         io::stdin().read_line(&mut input_string).unwrap();
 
@@ -80,26 +80,7 @@ pub fn start_game(word: Vec<char>) {
             continue;
         }
 
-        for (i, c) in input_string.chars().enumerate() {
-            if i >= 5 {
-                break;
-            }
-
-            let target_char = curr_try.get(i).unwrap();
-            if c == *target_char {
-                print!("\x1b[1;32m{}\x1b[0m", c);
-                curr_try[i] = '\0';
-            } else if word.contains(&c)
-                && word.contains(&c)
-                && input_string.chars().filter(|&x| x == c).count()
-                    <= word.iter().filter(|&&x| x == c).count()
-            {
-                print!("\x1b[0;33m{}\x1b[0m", c);
-                curr_try[i] = '\0';
-            } else {
-                print!("\x1b[0;37m{}\x1b[0m", c);
-            }
-        }
+        compare_words(input_string, curr_try);
 
         println!();
         tries += 1;
@@ -108,3 +89,64 @@ pub fn start_game(word: Vec<char>) {
     println!("almost");
     fail_route();
 }
+
+pub fn compare_words(input: String, mut wotd: Vec<char>) {
+    let orgiginal_wotd = wotd.clone();
+
+    for (i, c) in input.chars().enumerate() {
+        if i >= 5 {
+            break;
+        }
+
+        let target_char = wotd.get(i).unwrap();
+        if c == *target_char {
+            print!("\x1b[1;32m{}\x1b[0m", c);
+            wotd[i] = '\0';
+        } else if orgiginal_wotd.contains(&c)
+            && orgiginal_wotd.contains(&c)
+            && input.chars().filter(|&x| x == c).count()
+                <= orgiginal_wotd.iter().filter(|&&x| x == c).count()
+        {
+            print!("\x1b[0;33m{}\x1b[0m", c);
+            wotd[i] = '\0';
+        } else {
+            print!("\x1b[0;37m{}\x1b[0m", c);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_word() {
+        let sample_data = "{\"solution\":\"test\"}";
+        let result = get_word(sample_data.as_bytes()).unwrap();
+        assert_eq!(result.solution, "test");
+    }
+
+    #[test]
+    fn test_duplicate_letters() {}
+}
+
+/* struct Game {
+  word: [char; 5];
+  state: GameState
+}
+
+enum GameState {
+  Won,
+  Lost,
+  InProgress {
+    guesses: Vec<Guess>
+  }
+}
+
+struct Guess([char; 5]);
+
+impl Guess {
+  pub fn new(value: &str) -> Result<Self, ()> {
+    Self(value.chars().collect::<Vec<_>>().map_err(|_| ()))
+  }
+} */
