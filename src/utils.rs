@@ -20,7 +20,7 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn new(word: Vec<char>) -> Self {
+    pub fn new(word: Word) -> Self {
         Game {
             word,
             state: GameState::InProgress {
@@ -86,12 +86,17 @@ impl Game {
                         .read_line(&mut input_string)
                         .expect("Please enter a valid string");
                     let guess = input_string.trim().chars().collect::<Word>();
+
+                    // Handle won state
+                    if guess == self.word {
+                        self.change_state(GameState::Won);
+                        continue;
+                    }
+
                     if guess.len() != 5 {
                         println!("Please enter a 5 letter word");
                         continue;
                     }
-
-                    self.add_guess(guess);
                 }
             }
         }
