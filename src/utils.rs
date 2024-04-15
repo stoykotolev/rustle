@@ -1,4 +1,4 @@
-use std::io::{self, Cursor};
+use std::io::{stdin, Cursor};
 use std::process::Command;
 
 use chrono::Local;
@@ -12,25 +12,96 @@ pub struct WordleData<'a> {
     pub solution: &'a str,
 }
 
-pub fn fail_route() {
-    // Get a output stream handle to the default physical sound device
-    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+type Word = Vec<char>;
 
-    // Load the audio file at compile time as bytes,
-    // to be able to use regardless of current
-    // directory
-    let audio_file = include_bytes!("../assets/stupid.mp3");
-    let audio_cursor = Cursor::new(audio_file);
-    let audio_buffer = BufReader::new(audio_cursor);
+pub struct Game {
+    pub word: Word,
+    state: GameState,
+}
 
-    // Decode that sound file into a source
-    let source = Decoder::new(audio_buffer).unwrap();
+impl Game {
+    pub fn new(word: Vec<char>) -> Self {
+        Game {
+            word,
+            state: GameState::InProgress {
+                guesses: Vec::new(),
+            },
+        }
+    }
 
-    // Play the sound directly on the device
-    stream_handle
-        .play_raw(source.convert_samples())
-        .expect("Failed to play file");
-    std::thread::sleep(std::time::Duration::from_secs(1));
+    fn change_state(&mut self, state: GameState) {
+        self.state = state;
+    }
+
+    fn add_guess(&mut self, guess: Word) {
+        if let GameState::InProgress { guesses } = &mut self.state {
+            guesses.push(guess)
+        }
+    }
+
+    pub fn start_game(&mut self) {
+        println!("Please enter a 5 letter word: ");
+        loop {
+            match &mut self.state {
+                GameState::Won => {
+                    println!("You are correcto");
+                    Command::new("open")
+        .arg("raycast://confetti")
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("You should have Raycast... But congratulations I guess. Download Raycast though.");
+                    std::process::exit(1);
+                }
+                GameState::Lost => {
+                    println!("almost, baka");
+                    // Get a output stream handle to the default physical sound device
+                    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+
+                    // Load the audio file at compile time as bytes,
+                    // to be able to use regardless of current
+                    // directory
+                    let audio_file = include_bytes!("../assets/stupid.mp3");
+                    let audio_cursor = Cursor::new(audio_file);
+                    let audio_buffer = BufReader::new(audio_cursor);
+
+                    // Decode that sound file into a source
+                    let source = Decoder::new(audio_buffer).unwrap();
+
+                    // Play the sound directly on the device
+                    stream_handle
+                        .play_raw(source.convert_samples())
+                        .expect("Failed to play file");
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    break;
+                }
+                GameState::InProgress { guesses } => {
+                    // Handle the loss state
+                    if guesses.len() >= 6 {
+                        self.change_state(GameState::Lost);
+                        continue;
+                    }
+
+                    let mut input_string = String::new();
+                    stdin()
+                        .read_line(&mut input_string)
+                        .expect("Please enter a valid string");
+                    let guess = input_string.trim().chars().collect::<Word>();
+                    if guess.len() != 5 {
+                        println!("Please enter a 5 letter word");
+                        continue;
+                    }
+
+                    self.add_guess(guess);
+                }
+            }
+        }
+    }
+}
+
+enum GameState {
+    Won,
+    Lost,
+    InProgress { guesses: Vec<Word> },
 }
 
 pub fn get_data() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
@@ -52,65 +123,27 @@ pub fn get_word(bytes: &[u8]) -> Result<WordleData<'_>, Box<dyn std::error::Erro
     Ok(word)
 }
 
-pub fn start_game(word: Vec<char>) {
-    let mut tries: i8 = 1;
-
-    println!("Please enter a 5 letter word: ");
-
-    while tries <= 5 {
-        let mut input_string = String::new();
-        let curr_try = word.clone();
-
-        io::stdin().read_line(&mut input_string).unwrap();
-
-        if input_string.trim() == word.iter().collect::<String>().trim() {
-            println!("You are correcto");
-            Command::new("open")
-                .arg("raycast://confetti")
-                .stderr(std::process::Stdio::null())
-                .spawn()
-                .expect(
-                "You should have Raycast... But congratulations I guess. Download Raycast though.",
-            );
-            std::process::exit(1);
-        }
-
-        if input_string.trim().len() != 5 {
-            println!("Please enter a 5 letter word");
-            continue;
-        }
-
-        compare_words(input_string, curr_try);
-
-        println!();
-        tries += 1;
-    }
-
-    println!("almost");
-    fail_route();
-}
-
 pub fn compare_words(input: String, mut wotd: Vec<char>) {
     let orgiginal_wotd = wotd.clone();
 
-    for (i, c) in input.chars().enumerate() {
-        if i >= 5 {
+    for (indx, char) in input.chars().enumerate() {
+        if indx >= 5 {
             break;
         }
 
-        let target_char = wotd.get(i).unwrap();
-        if c == *target_char {
-            print!("\x1b[1;32m{}\x1b[0m", c);
-            wotd[i] = '\0';
-        } else if orgiginal_wotd.contains(&c)
-            && orgiginal_wotd.contains(&c)
-            && input.chars().filter(|&x| x == c).count()
-                <= orgiginal_wotd.iter().filter(|&&x| x == c).count()
+        let target_char = wotd.get(indx).unwrap();
+        if char == *target_char {
+            print!("\x1b[1;32m{}\x1b[0m", char);
+            wotd[indx] = '\0';
+        } else if orgiginal_wotd.contains(&char)
+            && orgiginal_wotd.contains(&char)
+            && input.chars().filter(|&x| x == char).count()
+                <= orgiginal_wotd.iter().filter(|&&x| x == char).count()
         {
-            print!("\x1b[0;33m{}\x1b[0m", c);
-            wotd[i] = '\0';
+            print!("\x1b[0;33m{}\x1b[0m", char);
+            wotd[indx] = '\0';
         } else {
-            print!("\x1b[0;37m{}\x1b[0m", c);
+            print!("\x1b[0;37m{}\x1b[0m", char);
         }
     }
 }
@@ -125,28 +158,6 @@ mod tests {
         let result = get_word(sample_data.as_bytes()).unwrap();
         assert_eq!(result.solution, "test");
     }
-
-    #[test]
-    fn test_duplicate_letters() {}
 }
 
-/* struct Game {
-  word: [char; 5];
-  state: GameState
-}
-
-enum GameState {
-  Won,
-  Lost,
-  InProgress {
-    guesses: Vec<Guess>
-  }
-}
-
-struct Guess([char; 5]);
-
-impl Guess {
-  pub fn new(value: &str) -> Result<Self, ()> {
-    Self(value.chars().collect::<Vec<_>>().map_err(|_| ()))
-  }
-} */
+/*  */
