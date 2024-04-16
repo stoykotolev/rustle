@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::{self, stdin, Cursor, Write};
+use std::io::{self, stdin, Cursor};
 use std::process::Command;
 
 use chrono::Local;
@@ -40,7 +40,7 @@ impl Game {
         }
     }
 
-    fn compare_words(&self, input: Word) -> Word {
+    fn compare_words(&self, input: Word, stdout: &mut dyn io::Write) -> Word {
         let mut new_guess: Word = vec!['\0'; 5];
         let mut matched_counts: HashMap<char, usize> = HashMap::new();
 
@@ -52,25 +52,25 @@ impl Game {
             let wotd_char = &self.word[indx];
 
             if char == wotd_char {
-                print!("\x1b[1;32m{}\x1b[0m", char);
+                let _ = write!(stdout, "\x1b[1;32m{}\x1b[0m", char);
                 new_guess[indx] = *char;
             } else if self.word.contains(char) {
                 let count_in_word = self.word.iter().filter(|&x| x == char).count();
                 let count_in_input = input.iter().filter(|&x| x == char).count();
                 if count_in_input <= count_in_word - matched_counts.get(char).copied().unwrap_or(0)
                 {
-                    print!("\x1b[0;33m{}\x1b[0m", char);
+                    let _ = write!(stdout, "\x1b[0;33m{}\x1b[0m", char);
                     new_guess[indx] = *char;
                     *matched_counts.entry(*char).or_insert(0) += 1;
                 } else {
-                    print!("\x1b[0;37m{}\x1b[0m", char);
+                    let _ = write!(stdout, "\x1b[0;37m{}\x1b[0m", char);
                     new_guess[indx] = *char;
                 }
             } else {
-                print!("\x1b[0;37m{}\x1b[0m", char);
+                let _ = write!(stdout, "\x1b[0;37m{}\x1b[0m", char);
             }
         }
-        println!();
+        let _ = writeln!(stdout);
         new_guess
     }
 
@@ -132,7 +132,7 @@ impl Game {
                         println!("Please enter a 5 letter word");
                         continue;
                     }
-                    let new_guess = self.compare_words(guess);
+                    let new_guess = self.compare_words(guess, &mut io::stdout());
                     self.add_guess(new_guess);
                 }
             }
@@ -180,32 +180,13 @@ mod tests {
     fn test_compare_words() {
         let word = vec!['s', 'p', 'e', 'l', 'l'];
         let input = vec!['s', 'p', 'e', 'l', 'l']; // All characters match
+        let mut output = Vec::new();
 
-        // Redirect stdout to a buffer
-        let mut buffer = Vec::new();
-        {
-            let stdout = io::stdout();
-            let _ = stdout.lock();
-            io::stdout().flush().unwrap(); // Ensure the buffer is flushed
-            let result = {
-                let game = Game::new(word.clone());
-                let result = game.compare_words(input.clone());
-                println!("result: {:?}", result);
-                for char in &result {
-                    write!(&mut buffer, "{}", char).unwrap();
-                }
-                result
-            };
+        let game = Game::new(word);
+        game.compare_words(input, &mut output);
+        let parsed_input = String::from_utf8(output).expect("Couldn't parse string");
 
-            // Assert against the result
-            assert_eq!(result, word);
-        }
-
-        // Capture the printed output
-        let printed_output = String::from_utf8_lossy(&buffer);
-
-        // Assert against the printed output
-        assert_eq!(printed_output, "\x1b[1;32ms\x1b[0m\x1b[1;32mp\x1b[0m\x1b[1;32me\x1b[0m\x1b[1;32ml\x1b[0m\x1b[1;32ml\x1b[0m");
+        assert_eq!("\x1b[1;32ms\x1b[0m\x1b[1;32mp\x1b[0m\x1b[1;32me\x1b[0m\x1b[1;32ml\x1b[0m\x1b[1;32ml\x1b[0m", parsed_input.trim());
     }
 }
 
