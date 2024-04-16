@@ -213,5 +213,3 @@ mod tests {
         output.clear();
     }
 }
-
-/*  */
