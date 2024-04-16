@@ -57,8 +57,7 @@ impl Game {
             } else if self.word.contains(char) {
                 let count_in_word = self.word.iter().filter(|&x| x == char).count();
                 let count_in_input = input.iter().filter(|&x| x == char).count();
-                if count_in_input <= count_in_word - matched_counts.get(char).copied().unwrap_or(0)
-                {
+                if count_in_word - matched_counts.get(char).copied().unwrap_or(0) > 0 {
                     let _ = write!(stdout, "\x1b[0;33m{}\x1b[0m", char);
                     new_guess[indx] = *char;
                     *matched_counts.entry(*char).or_insert(0) += 1;
