@@ -179,14 +179,39 @@ mod tests {
     #[test]
     fn test_compare_words() {
         let word = vec!['s', 'p', 'e', 'l', 'l'];
-        let input = vec!['s', 'p', 'e', 'l', 'l']; // All characters match
+        let same_input = vec!['s', 'p', 'e', 'l', 'l']; // All characters match
         let mut output = Vec::new();
 
         let game = Game::new(word);
-        game.compare_words(input, &mut output);
-        let parsed_input = String::from_utf8(output).expect("Couldn't parse string");
+        game.compare_words(same_input, &mut output);
+        let parsed_success_input =
+            String::from_utf8(output.clone()).expect("Couldn't parse string");
+        output.clear();
 
-        assert_eq!("\x1b[1;32ms\x1b[0m\x1b[1;32mp\x1b[0m\x1b[1;32me\x1b[0m\x1b[1;32ml\x1b[0m\x1b[1;32ml\x1b[0m", parsed_input.trim());
+        assert_eq!("\x1b[1;32ms\x1b[0m\x1b[1;32mp\x1b[0m\x1b[1;32me\x1b[0m\x1b[1;32ml\x1b[0m\x1b[1;32ml\x1b[0m", parsed_success_input.trim());
+
+        let entirely_different_input = vec!['d', 'a', 'w', 'u', 'i'];
+
+        game.compare_words(entirely_different_input, &mut output);
+        let parsed_failed_input = String::from_utf8(output.clone()).expect("Couldn't parse string");
+        assert_eq!("\u{1b}[0;37md\u{1b}[0m\u{1b}[0;37ma\u{1b}[0m\u{1b}[0;37mw\u{1b}[0m\u{1b}[0;37mu\u{1b}[0m\u{1b}[0;37mi\u{1b}[0m", parsed_failed_input.trim());
+        output.clear();
+
+        let slightly_different_input = vec!['d', 'e', 'w', 'l', 'i'];
+        game.compare_words(slightly_different_input, &mut output);
+        let parsed_slightly_different_input =
+            String::from_utf8(output.clone()).expect("Couldn't parse string");
+        assert_eq!("\u{1b}[0;37md\u{1b}[0m\u{1b}[0;33me\u{1b}[0m\u{1b}[0;37mw\u{1b}[0m\u{1b}[1;32ml\u{1b}[0m\u{1b}[0;37mi\u{1b}[0m", parsed_slightly_different_input.trim());
+        output.clear();
+
+        let slightly_different_input_with_duplicate_letters = vec!['d', 'l', 'l', 'i', 'a'];
+        game.compare_words(slightly_different_input_with_duplicate_letters, &mut output);
+
+        let parsed_slightly_different_input_with_duplicate_letters =
+            String::from_utf8(output.clone()).expect("Couldn't parse string");
+
+        assert_eq!("\x1b[0;37md\x1b[0m\x1b[0;33ml\x1b[0m\x1b[0;33ml\x1b[0m\x1b[0;37mi\x1b[0m\x1b[0;37ma\x1b[0m", parsed_slightly_different_input_with_duplicate_letters.trim());
+        output.clear();
     }
 }
 
