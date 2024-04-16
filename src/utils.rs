@@ -1,4 +1,5 @@
-use std::io::{stdin, Cursor};
+use std::collections::HashMap;
+use std::io::{self, stdin, Cursor, Write};
 use std::process::Command;
 
 use chrono::Local;
@@ -15,7 +16,7 @@ pub struct WordleData<'a> {
 type Word = Vec<char>;
 
 pub struct Game {
-    pub word: Word,
+    word: Word,
     state: GameState,
 }
 
@@ -39,6 +40,40 @@ impl Game {
         }
     }
 
+    fn compare_words(&self, input: Word) -> Word {
+        let mut new_guess: Word = vec!['\0'; 5];
+        let mut matched_counts: HashMap<char, usize> = HashMap::new();
+
+        for (indx, char) in input.iter().enumerate() {
+            if indx >= 5 {
+                break;
+            }
+
+            let wotd_char = &self.word[indx];
+
+            if char == wotd_char {
+                print!("\x1b[1;32m{}\x1b[0m", char);
+                new_guess[indx] = *char;
+            } else if self.word.contains(char) {
+                let count_in_word = self.word.iter().filter(|&x| x == char).count();
+                let count_in_input = input.iter().filter(|&x| x == char).count();
+                if count_in_input <= count_in_word - matched_counts.get(char).copied().unwrap_or(0)
+                {
+                    print!("\x1b[0;33m{}\x1b[0m", char);
+                    new_guess[indx] = *char;
+                    *matched_counts.entry(*char).or_insert(0) += 1;
+                } else {
+                    print!("\x1b[0;37m{}\x1b[0m", char);
+                    new_guess[indx] = *char;
+                }
+            } else {
+                print!("\x1b[0;37m{}\x1b[0m", char);
+            }
+        }
+        println!();
+        new_guess
+    }
+
     pub fn start_game(&mut self) {
         println!("Please enter a 5 letter word: ");
         loop {
@@ -46,10 +81,10 @@ impl Game {
                 GameState::Won => {
                     println!("You are correcto");
                     Command::new("open")
-        .arg("raycast://confetti")
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .expect("You should have Raycast... But congratulations I guess. Download Raycast though.");
+                        .arg("raycast://confetti")
+                        .stderr(std::process::Stdio::null())
+                        .spawn()
+                        .expect("You should have Raycast... But congratulations I guess. Download Raycast though.");
                     std::process::exit(1);
                 }
                 GameState::Lost => {
@@ -97,6 +132,8 @@ impl Game {
                         println!("Please enter a 5 letter word");
                         continue;
                     }
+                    let new_guess = self.compare_words(guess);
+                    self.add_guess(new_guess);
                 }
             }
         }
@@ -128,31 +165,6 @@ pub fn get_word(bytes: &[u8]) -> Result<WordleData<'_>, Box<dyn std::error::Erro
     Ok(word)
 }
 
-pub fn compare_words(input: String, mut wotd: Vec<char>) {
-    let orgiginal_wotd = wotd.clone();
-
-    for (indx, char) in input.chars().enumerate() {
-        if indx >= 5 {
-            break;
-        }
-
-        let target_char = wotd.get(indx).unwrap();
-        if char == *target_char {
-            print!("\x1b[1;32m{}\x1b[0m", char);
-            wotd[indx] = '\0';
-        } else if orgiginal_wotd.contains(&char)
-            && orgiginal_wotd.contains(&char)
-            && input.chars().filter(|&x| x == char).count()
-                <= orgiginal_wotd.iter().filter(|&&x| x == char).count()
-        {
-            print!("\x1b[0;33m{}\x1b[0m", char);
-            wotd[indx] = '\0';
-        } else {
-            print!("\x1b[0;37m{}\x1b[0m", char);
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -162,6 +174,38 @@ mod tests {
         let sample_data = "{\"solution\":\"test\"}";
         let result = get_word(sample_data.as_bytes()).unwrap();
         assert_eq!(result.solution, "test");
+    }
+
+    #[test]
+    fn test_compare_words() {
+        let word = vec!['s', 'p', 'e', 'l', 'l'];
+        let input = vec!['s', 'p', 'e', 'l', 'l']; // All characters match
+
+        // Redirect stdout to a buffer
+        let mut buffer = Vec::new();
+        {
+            let stdout = io::stdout();
+            let _ = stdout.lock();
+            io::stdout().flush().unwrap(); // Ensure the buffer is flushed
+            let result = {
+                let game = Game::new(word.clone());
+                let result = game.compare_words(input.clone());
+                println!("result: {:?}", result);
+                for char in &result {
+                    write!(&mut buffer, "{}", char).unwrap();
+                }
+                result
+            };
+
+            // Assert against the result
+            assert_eq!(result, word);
+        }
+
+        // Capture the printed output
+        let printed_output = String::from_utf8_lossy(&buffer);
+
+        // Assert against the printed output
+        assert_eq!(printed_output, "\x1b[1;32ms\x1b[0m\x1b[1;32mp\x1b[0m\x1b[1;32me\x1b[0m\x1b[1;32ml\x1b[0m\x1b[1;32ml\x1b[0m");
     }
 }
 
