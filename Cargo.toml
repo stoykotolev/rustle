@@ -1,7 +1,12 @@
 [package]
 name = "rustle"
+author = ["stoykotolev <st.tolev@gmail.com>"]
 version = "0.1.0"
 edition = "2021"
+description = "A wordle clone to play in the terminal"
+license = "MIT"
+repository = "https://github.com/stoykotolev/rustle"
+homepage = "https://github.com/stoykotolev/rustle"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
