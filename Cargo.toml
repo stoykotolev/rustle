@@ -1,5 +1,5 @@
 [package]
-name = "rustle"
+name = "strustle"
 author = ["stoykotolev <st.tolev@gmail.com>"]
 version = "0.1.0"
 edition = "2021"
@@ -13,6 +13,6 @@ homepage = "https://github.com/stoykotolev/rustle"
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-reqwest = { version = "0.11", features = ["blocking", "json"] }
 chrono = "0.4.38"
+reqwest = { version = "0.12", features = ["blocking", "json"] }
 rodio = "0.17.3"
