@@ -42,31 +42,41 @@ impl Game {
 
     fn compare_words(&self, input: Word, stdout: &mut dyn io::Write) -> Word {
         let mut new_guess: Word = vec!['\0'; 5];
-        let mut matched_counts: HashMap<char, usize> = HashMap::new();
+        let mut letter_count_hashmap: HashMap<&char, usize> = HashMap::new();
+        for letter in &self.word {
+            let counter = letter_count_hashmap.entry(letter).or_insert(0);
+            *counter += 1;
+        }
 
-        for (indx, char) in input.iter().enumerate() {
+        for (indx, input_char) in input.iter().enumerate() {
             if indx >= 5 {
                 break;
             }
 
             let wotd_char = &self.word[indx];
 
-            if char == wotd_char {
-                let _ = write!(stdout, "\x1b[1;32m{}\x1b[0m", char);
-                new_guess[indx] = *char;
-            } else if self.word.contains(char) {
-                let count_in_word = self.word.iter().filter(|&x| x == char).count();
-                if count_in_word - matched_counts.get(char).copied().unwrap_or(0) > 0 {
-                    let _ = write!(stdout, "\x1b[0;33m{}\x1b[0m", char);
-                    new_guess[indx] = *char;
-                    *matched_counts.entry(*char).or_insert(0) += 1;
-                } else {
-                    let _ = write!(stdout, "\x1b[0;37m{}\x1b[0m", char);
-                    new_guess[indx] = *char;
-                }
-            } else {
-                let _ = write!(stdout, "\x1b[0;37m{}\x1b[0m", char);
+            let letter_count = letter_count_hashmap.get(input_char).unwrap_or(&0);
+            if !letter_count_hashmap.contains_key(input_char) || letter_count == &0 {
+                let _ = write!(stdout, "\x1b[0;37m{}\x1b[0m", input_char);
+                continue;
             }
+            if input_char == wotd_char && letter_count > &0 {
+                let _ = write!(stdout, "\x1b[1;32m{}\x1b[0m", input_char);
+                new_guess[indx] = *input_char;
+                letter_count_hashmap.entry(input_char).and_modify(|c| {
+                    if c > &mut 0 {
+                        *c -= 1
+                    }
+                });
+                continue;
+            }
+            let _ = write!(stdout, "\x1b[0;33m{}\x1b[0m", input_char);
+            new_guess[indx] = *input_char;
+            letter_count_hashmap.entry(input_char).and_modify(|c| {
+                if c > &mut 0 {
+                    *c -= 1
+                }
+            });
         }
         let _ = writeln!(stdout);
         new_guess
@@ -175,7 +185,7 @@ mod tests {
     }
 
     #[test]
-    fn test_compare_words() {
+    fn test_correct_input() {
         let word = vec!['s', 'p', 'e', 'l', 'l'];
         let same_input = vec!['s', 'p', 'e', 'l', 'l']; // All characters match
         let mut output = Vec::new();
@@ -184,31 +194,63 @@ mod tests {
         game.compare_words(same_input, &mut output);
         let parsed_success_input =
             String::from_utf8(output.clone()).expect("Couldn't parse string");
-        output.clear();
 
         assert_eq!("\x1b[1;32ms\x1b[0m\x1b[1;32mp\x1b[0m\x1b[1;32me\x1b[0m\x1b[1;32ml\x1b[0m\x1b[1;32ml\x1b[0m", parsed_success_input.trim());
+    }
 
+    #[test]
+    fn test_entirely_different_input() {
+        let word = vec!['s', 'p', 'e', 'l', 'l'];
+        let mut output = Vec::new();
+        let game = Game::new(word);
         let entirely_different_input = vec!['d', 'a', 'w', 'u', 'i'];
 
         game.compare_words(entirely_different_input, &mut output);
-        let parsed_failed_input = String::from_utf8(output.clone()).expect("Couldn't parse string");
-        assert_eq!("\u{1b}[0;37md\u{1b}[0m\u{1b}[0;37ma\u{1b}[0m\u{1b}[0;37mw\u{1b}[0m\u{1b}[0;37mu\u{1b}[0m\u{1b}[0;37mi\u{1b}[0m", parsed_failed_input.trim());
-        output.clear();
 
+        let parsed_failed_input = String::from_utf8(output.clone()).expect("Couldn't parse string");
+
+        assert_eq!("\u{1b}[0;37md\u{1b}[0m\u{1b}[0;37ma\u{1b}[0m\u{1b}[0;37mw\u{1b}[0m\u{1b}[0;37mu\u{1b}[0m\u{1b}[0;37mi\u{1b}[0m", parsed_failed_input.trim());
+    }
+    #[test]
+    fn test_slightly_different_input() {
+        let word = vec!['s', 'p', 'e', 'l', 'l'];
+        let mut output = Vec::new();
+        let game = Game::new(word);
         let slightly_different_input = vec!['d', 'e', 'w', 'l', 'i'];
+
         game.compare_words(slightly_different_input, &mut output);
+
         let parsed_slightly_different_input =
             String::from_utf8(output.clone()).expect("Couldn't parse string");
-        assert_eq!("\u{1b}[0;37md\u{1b}[0m\u{1b}[0;33me\u{1b}[0m\u{1b}[0;37mw\u{1b}[0m\u{1b}[1;32ml\u{1b}[0m\u{1b}[0;37mi\u{1b}[0m", parsed_slightly_different_input.trim());
-        output.clear();
 
+        assert_eq!("\u{1b}[0;37md\u{1b}[0m\u{1b}[0;33me\u{1b}[0m\u{1b}[0;37mw\u{1b}[0m\u{1b}[1;32ml\u{1b}[0m\u{1b}[0;37mi\u{1b}[0m", parsed_slightly_different_input.trim());
+    }
+    #[test]
+    fn test_slightly_different_input_with_duplicate_letters() {
+        let word = vec!['s', 'p', 'e', 'l', 'l'];
         let slightly_different_input_with_duplicate_letters = vec!['d', 'l', 'l', 'i', 'a'];
+        let mut output = Vec::new();
+        let game = Game::new(word);
+
         game.compare_words(slightly_different_input_with_duplicate_letters, &mut output);
 
         let parsed_slightly_different_input_with_duplicate_letters =
             String::from_utf8(output.clone()).expect("Couldn't parse string");
 
         assert_eq!("\x1b[0;37md\x1b[0m\x1b[0;33ml\x1b[0m\x1b[0;33ml\x1b[0m\x1b[0;37mi\x1b[0m\x1b[0;37ma\x1b[0m", parsed_slightly_different_input_with_duplicate_letters.trim());
-        output.clear();
+    }
+    #[test]
+    fn test_input_with_more_duplicate_letters() {
+        let word = vec!['s', 'p', 'e', 'l', 'l'];
+        let input_with_more_duplicates = vec!['s', 'e', 'e', 'l', 'l'];
+        let mut output = Vec::new();
+        let game = Game::new(word);
+
+        game.compare_words(input_with_more_duplicates, &mut output);
+
+        let parsed_with_more_duplicate_letters =
+            String::from_utf8(output.clone()).expect("Couldn't parse string");
+
+        assert_eq!("\x1b[1;32ms\x1b[0m\x1b[0;33me\x1b[0m\x1b[0;37me\x1b[0m\x1b[1;32ml\x1b[0m\x1b[1;32ml\x1b[0m", parsed_with_more_duplicate_letters.trim());
     }
 }
