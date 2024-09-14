@@ -61,7 +61,7 @@ impl Game {
                 let _ = write!(stdout, "\x1b[1;32m{}\x1b[0m", input_char);
                 new_guess[indx] = *input_char;
                 letter_count_hashmap.entry(input_char).and_modify(|c| {
-                    if c > &mut 0 {
+                    if *c > 0 {
                         *c -= 1
                     }
                 });
@@ -72,7 +72,7 @@ impl Game {
                 let _ = write!(stdout, "\x1b[0;33m{}\x1b[0m", input_char);
                 new_guess[indx] = *input_char;
                 letter_count_hashmap.entry(input_char).and_modify(|c| {
-                    if c > &mut 0 {
+                    if *c > 0 {
                         *c -= 1
                     }
                 });
@@ -100,7 +100,7 @@ impl Game {
                 }
                 GameState::Lost => {
                     println!(
-                        "almost, baka. The word is actually {}",
+                        "almost, baka. The word is actually {}l",
                         self.word.clone().into_iter().collect::<String>()
                     );
                     // Get a output stream handle to the default physical sound device
