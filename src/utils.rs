@@ -99,7 +99,10 @@ impl Game {
                     std::process::exit(1);
                 }
                 GameState::Lost => {
-                    println!("almost, baka");
+                    println!(
+                        "almost, baka. The word is actually {}",
+                        self.word.clone().into_iter().collect::<String>()
+                    );
                     // Get a output stream handle to the default physical sound device
                     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
 
