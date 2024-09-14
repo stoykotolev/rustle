@@ -56,27 +56,30 @@ impl Game {
             let wotd_char = &self.word[indx];
 
             let letter_count = letter_count_hashmap.get(input_char).unwrap_or(&0);
-            if !letter_count_hashmap.contains_key(input_char) || letter_count == &0 {
-                let _ = write!(stdout, "\x1b[0;37m{}\x1b[0m", input_char);
-                continue;
-            }
+            // This checks if this letter is in the correct place and exists in the input.
             if input_char == wotd_char && letter_count > &0 {
                 let _ = write!(stdout, "\x1b[1;32m{}\x1b[0m", input_char);
                 new_guess[indx] = *input_char;
                 letter_count_hashmap.entry(input_char).and_modify(|c| {
-                    if c > &mut 0 {
+                    if *c > 0 {
                         *c -= 1
                     }
                 });
                 continue;
             }
-            let _ = write!(stdout, "\x1b[0;33m{}\x1b[0m", input_char);
-            new_guess[indx] = *input_char;
-            letter_count_hashmap.entry(input_char).and_modify(|c| {
-                if c > &mut 0 {
-                    *c -= 1
-                }
-            });
+            // This checks if this letter exists in the input but is in the wrong spot.
+            if letter_count > &0 {
+                let _ = write!(stdout, "\x1b[0;33m{}\x1b[0m", input_char);
+                new_guess[indx] = *input_char;
+                letter_count_hashmap.entry(input_char).and_modify(|c| {
+                    if *c > 0 {
+                        *c -= 1
+                    }
+                });
+                continue;
+            }
+            // The letter does not exist in the input.
+            let _ = write!(stdout, "\x1b[0;37m{}\x1b[0m", input_char);
         }
         let _ = writeln!(stdout);
         new_guess
@@ -96,7 +99,10 @@ impl Game {
                     std::process::exit(1);
                 }
                 GameState::Lost => {
-                    println!("almost, baka");
+                    println!(
+                        "almost, baka. The word is actually {}l",
+                        self.word.clone().into_iter().collect::<String>()
+                    );
                     // Get a output stream handle to the default physical sound device
                     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
 
@@ -238,6 +244,20 @@ mod tests {
             String::from_utf8(output.clone()).expect("Couldn't parse string");
 
         assert_eq!("\x1b[0;37md\x1b[0m\x1b[0;33ml\x1b[0m\x1b[0;33ml\x1b[0m\x1b[0;37mi\x1b[0m\x1b[0;37ma\x1b[0m", parsed_slightly_different_input_with_duplicate_letters.trim());
+    }
+    #[test]
+    fn test_duplicate_letter_input_with_correct_letter_place_without_duplicate_letters() {
+        let word = vec!['s', 'p', 'e', 'l', 't'];
+        let slightly_different_input_with_duplicate_letters = vec!['d', 'i', 'i', 'l', 'l'];
+        let mut output = Vec::new();
+        let game = Game::new(word);
+
+        game.compare_words(slightly_different_input_with_duplicate_letters, &mut output);
+
+        let parsed_slightly_different_input_with_duplicate_letters =
+            String::from_utf8(output.clone()).expect("Couldn't parse string");
+
+        assert_eq!("\x1b[0;37md\x1b[0m\x1b[0;37mi\x1b[0m\x1b[0;37mi\x1b[0m\x1b[1;32ml\x1b[0m\x1b[0;37ml\x1b[0m", parsed_slightly_different_input_with_duplicate_letters.trim());
     }
     #[test]
     fn test_input_with_more_duplicate_letters() {
