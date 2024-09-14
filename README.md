@@ -10,7 +10,7 @@ There are a couple of features missing, but I am getting to them.
 
 The usual stuff
 
-```
+```bash
 cargo run
 ```
 
@@ -21,4 +21,4 @@ will build the project and start it
 - [x] Add a function to check if the word has repeatable letters and detect their position/color
 - [ ] Add a check to see if you have already solved the word for this day
 - [ ] Maybe add a tracker of how much correct guesses, etc. like with the original game
-- [ ] Fix a bug where if you pass duplicate letters in a word that doesn't have them, it still colors them.
+- [x] Fix a bug where if you pass duplicate letters in a word that doesn't have them, it still colors them.
