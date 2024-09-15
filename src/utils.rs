@@ -100,7 +100,7 @@ impl Game {
                 }
                 GameState::Lost => {
                     println!(
-                        "almost, baka. The word is actually {}l",
+                        "almost, baka. The word is actually {}",
                         self.word.clone().into_iter().collect::<String>()
                     );
                     // Get a output stream handle to the default physical sound device
