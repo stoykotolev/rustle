@@ -1,22 +1,24 @@
-mod utils;
-use utils::{get_data, get_word, Game};
+use strustle::game::Game;
+use strustle::nyt::fetch_solution;
 
 fn main() {
-    let bytes = match get_data() {
-        Ok(value) => value,
+    let solution = match fetch_solution() {
+        Ok(s) => s,
         Err(err) => {
-            eprintln!("Error: {:?}", err);
-            std::process::exit(1);
-        }
-    };
-    let word_of_the_day = match get_word(&bytes) {
-        Ok(value) => value.solution.chars().collect::<Vec<char>>(),
-        Err(err) => {
-            eprintln!("Error: {:?}", err);
+            eprintln!("Error: {err}");
             std::process::exit(1);
         }
     };
 
-    let mut game = Game::new(word_of_the_day);
-    game.start_game();
+    let mut game = match Game::new(solution.chars().collect::<Vec<char>>()) {
+        Ok(game) => game,
+        Err(err) => {
+            eprintln!("Error: {err}");
+            std::process::exit(1);
+        }
+    };
+    let won = game.start_game();
+    if !won {
+        std::process::exit(1);
+    }
 }
