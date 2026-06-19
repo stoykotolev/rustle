@@ -1,12 +1,31 @@
 use std::collections::HashMap;
 
+/// The evaluation state of a single letter in a Wordle guess.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LetterState {
+    /// The letter is in the correct position.
     Correct,
+    /// The letter appears in the solution but in a different position.
     Present,
+    /// The letter does not appear in the solution (or all occurrences have
+    /// already been accounted for by `Correct`/`Present` slots).
     Absent,
 }
 
+/// Evaluates a five-letter guess against the solution and returns one
+/// [`LetterState`] per position.
+///
+/// The algorithm uses two passes to handle duplicate letters correctly:
+///
+/// 1. **Pass 1 — exact matches**: any position where `guess[i] == solution[i]`
+///    is marked [`LetterState::Correct`] and the corresponding solution letter
+///    is *consumed* (removed from the pool of remaining letters).
+/// 2. **Pass 2 — wrong-position matches**: for each non-`Correct` position,
+///    if the guessed letter still appears in the remaining pool, it is marked
+///    [`LetterState::Present`] and one occurrence is consumed from the pool.
+///
+/// The arrays are always exactly five elements long (matching the constant
+/// `WORD_LEN` defined in the `game` module).
 pub fn evaluate(guess: &[char; 5], solution: &[char; 5]) -> [LetterState; 5] {
     let mut result = [LetterState::Absent; 5];
     let mut remaining: HashMap<char, usize> = HashMap::new();

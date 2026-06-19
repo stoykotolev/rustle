@@ -1,16 +1,17 @@
-use std::io::{self, stdin, BufReader, Cursor};
-use std::process::Command;
-
-use rodio::{source::Source, Decoder, OutputStream};
+use std::io::{self, stdin};
 
 use crate::error::RustleError;
 use crate::feedback::LetterState;
 
+/// The number of characters in each Wordle word.
 pub const WORD_LEN: usize = 5;
+
+/// The maximum number of guesses the player is allowed.
 pub const MAX_GUESSES: usize = 6;
 
 type EvaluatedGuess = ([char; WORD_LEN], [LetterState; WORD_LEN]);
 
+/// Holds the current word and game state for a single Wordle session.
 pub struct Game {
     word: [char; WORD_LEN],
     state: GameState,
@@ -51,6 +52,13 @@ impl Game {
         }
     }
 
+    /// Runs the interactive game loop, returning `true` on a win and `false`
+    /// on a loss.
+    ///
+    /// Each iteration renders the board, reads a guess from stdin, validates
+    /// it, and evaluates it against the solution. The loop terminates when the
+    /// player either guesses the word correctly or exhausts all
+    /// [`MAX_GUESSES`] attempts.
     pub fn start_game(&mut self) -> bool {
         println!("Please enter a 5 letter word: ");
         loop {
@@ -61,13 +69,7 @@ impl Game {
                     crate::render::render_board(guesses, &mut io::stdout())
                         .expect("write to stdout");
                     println!("You are correcto");
-                    Command::new("open")
-                        .arg("raycast://confetti")
-                        .stderr(std::process::Stdio::null())
-                        .spawn()
-                        .expect("You should have Raycast... But congratulations I guess. Download Raycast though.")
-                        .wait()
-                        .ok();
+                    crate::celebrate::confetti();
                     return true;
                 }
                 GameState::Lost { guesses } => {
@@ -76,24 +78,7 @@ impl Game {
                         .expect("write to stdout");
                     let solution: String = self.word.iter().collect();
                     println!("almost, baka. The word is actually {solution}");
-                    // Get a output stream handle to the default physical sound device
-                    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
-
-                    // Load the audio file at compile time as bytes,
-                    // to be able to use regardless of current
-                    // directory
-                    let audio_file = include_bytes!("../assets/stupid.mp3");
-                    let audio_cursor = Cursor::new(audio_file);
-                    let audio_buffer = BufReader::new(audio_cursor);
-
-                    // Decode that sound file into a source
-                    let source = Decoder::new(audio_buffer).unwrap();
-
-                    // Play the sound directly on the device
-                    stream_handle
-                        .play_raw(source.convert_samples())
-                        .expect("Failed to play file");
-                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    crate::celebrate::play_sad_sound();
                     return false;
                 }
                 GameState::InProgress { guesses } => {
