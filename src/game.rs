@@ -46,6 +46,33 @@ impl Game {
         self.state = state;
     }
 
+    /// Returns the guessed words in play order as lowercase strings.
+    ///
+    /// Reads the accumulated guesses out of whichever [`GameState`] variant the
+    /// game currently holds, so it is valid both mid-game and after the loop has
+    /// reached a terminal state.
+    pub fn guessed_words(&self) -> Vec<String> {
+        let guesses = match &self.state {
+            GameState::Won { guesses }
+            | GameState::Lost { guesses }
+            | GameState::InProgress { guesses } => guesses,
+        };
+        guesses
+            .iter()
+            .map(|(word, _)| word.iter().collect())
+            .collect()
+    }
+
+    /// Returns `true` if the game has been won.
+    pub fn is_won(&self) -> bool {
+        matches!(self.state, GameState::Won { .. })
+    }
+
+    /// Returns the solution word as a lowercase string.
+    pub fn solution_string(&self) -> String {
+        self.word.iter().collect()
+    }
+
     fn add_evaluated_guess(&mut self, arr: [char; WORD_LEN], states: [LetterState; WORD_LEN]) {
         if let GameState::InProgress { guesses } = &mut self.state {
             guesses.push((arr, states));
