@@ -11,6 +11,20 @@ pub const MAX_GUESSES: usize = 6;
 
 type EvaluatedGuess = ([char; WORD_LEN], [LetterState; WORD_LEN]);
 
+/// The outcome of applying a single line of player input via [`Game::apply_turn`].
+///
+/// This captures every decision the game makes about one turn *without* touching
+/// stdin/stdout, so the turn logic can be exercised in unit tests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TurnResult {
+    /// The input was not applied; the payload is the user-facing reason.
+    Rejected(&'static str),
+    /// A valid guess was evaluated and recorded; the game continues.
+    Accepted,
+    /// The just-applied guess ended the game (a win or the final loss).
+    GameOver,
+}
+
 /// Holds the current word and game state for a single Wordle session.
 pub struct Game {
     word: [char; WORD_LEN],
@@ -118,54 +132,79 @@ impl Game {
                         .read_line(&mut input_string)
                         .expect("Please enter a valid string");
 
-                    let arr = match parse_guess(&input_string) {
-                        Ok(arr) => arr,
-                        Err(msg) => {
-                            println!("{msg}");
-                            continue;
-                        }
-                    };
-
-                    // The solution is always accepted, even if it is missing
-                    // from the bundled word list (which may be stale relative
-                    // to the live NYT answer). Otherwise the correct guess
-                    // could be rejected and the game made unwinnable.
-                    if !is_accepted_guess(&arr, &self.word) {
-                        println!("Not in word list");
-                        continue;
-                    }
-
-                    let states = crate::feedback::evaluate(&arr, &self.word);
-                    self.add_evaluated_guess(arr, states);
-
-                    // Decide the next state based on the just-added guess,
-                    // moving the accumulated guesses into the terminal state.
-                    if let GameState::InProgress { guesses } = &mut self.state {
-                        if arr == self.word {
-                            let guesses = std::mem::take(guesses);
-                            self.change_state(GameState::Won { guesses });
-                        } else if guesses.len() >= MAX_GUESSES {
-                            let guesses = std::mem::take(guesses);
-                            self.change_state(GameState::Lost { guesses });
-                        }
+                    // A rejection just prints the reason and re-prompts; an
+                    // accepted guess or game-over falls through to the next loop
+                    // iteration, which renders/handles the new state.
+                    if let TurnResult::Rejected(msg) = self.apply_turn(&input_string) {
+                        println!("{msg}");
                     }
                 }
             }
         }
     }
-}
 
-/// Returns `true` if `guess` may be entered as a guess.
-///
-/// A guess is accepted if it is a recognised word *or* if it exactly matches
-/// the solution. The latter guarantees the correct answer is never blocked by
-/// a stale bundled word list, which would otherwise make the game unwinnable.
-fn is_accepted_guess(guess: &[char; WORD_LEN], solution: &[char; WORD_LEN]) -> bool {
-    if guess == solution {
-        return true;
+    /// Applies one line of raw player input to the game and reports the outcome.
+    ///
+    /// This is the pure core of a turn: it performs no I/O. It parses the input,
+    /// validates it against the allowed-guess list, evaluates an accepted guess
+    /// against the solution, records it, and transitions the game state.
+    ///
+    /// The solution is always an accepted guess, even if it is missing from the
+    /// bundled (and possibly stale) word lists, so the game can never be made
+    /// unwinnable.
+    ///
+    /// Returns:
+    /// - [`TurnResult::Rejected`] with a user-facing message if the input is not
+    ///   a five-letter word or is not in the allowed-guess list. Nothing is
+    ///   recorded.
+    /// - [`TurnResult::GameOver`] if the recorded guess won the game or used up
+    ///   the final attempt.
+    /// - [`TurnResult::Accepted`] otherwise.
+    ///
+    /// Calling this once the game has already reached a terminal state is a
+    /// no-op that returns [`TurnResult::GameOver`].
+    pub fn apply_turn(&mut self, raw_input: &str) -> TurnResult {
+        if !matches!(self.state, GameState::InProgress { .. }) {
+            return TurnResult::GameOver;
+        }
+
+        let arr = match parse_guess(raw_input) {
+            Ok(arr) => arr,
+            Err(msg) => return TurnResult::Rejected(msg),
+        };
+
+        // A guess is accepted if it is in `answers ∪ allowed`, *or* if it
+        // exactly matches the solution. The bundled lists are a frozen snapshot
+        // and can lag the live NYT answer rotation, so the solution itself is
+        // not guaranteed to appear in them. Without this guard a solution that
+        // is absent from the lists could never be typed, making that day's game
+        // unwinnable.
+        if arr != self.word {
+            let word_str: String = arr.iter().collect();
+            if !crate::dictionary::is_allowed_guess(&word_str) {
+                return TurnResult::Rejected("Not in word list");
+            }
+        }
+
+        let states = crate::feedback::evaluate(&arr, &self.word);
+        self.add_evaluated_guess(arr, states);
+
+        // Decide the next state based on the just-added guess, moving the
+        // accumulated guesses into the terminal state.
+        if let GameState::InProgress { guesses } = &mut self.state {
+            if arr == self.word {
+                let guesses = std::mem::take(guesses);
+                self.change_state(GameState::Won { guesses });
+                return TurnResult::GameOver;
+            } else if guesses.len() >= MAX_GUESSES {
+                let guesses = std::mem::take(guesses);
+                self.change_state(GameState::Lost { guesses });
+                return TurnResult::GameOver;
+            }
+        }
+
+        TurnResult::Accepted
     }
-    let word_str: String = guess.iter().collect();
-    crate::dictionary::is_valid_word(&word_str)
 }
 
 fn parse_guess(raw: &str) -> Result<[char; WORD_LEN], &'static str> {
@@ -215,26 +254,71 @@ mod tests {
         assert_eq!(parse_guess("abc"), Err("Please enter a 5-letter word"));
     }
 
-    #[test]
-    fn test_accepted_guess_dictionary_word() {
-        let guess = ['c', 'r', 'a', 'n', 'e'];
-        let solution = ['s', 'p', 'e', 'l', 'l'];
-        assert!(is_accepted_guess(&guess, &solution));
+    fn game_with_solution(word: &str) -> Game {
+        Game::new(word.chars().collect()).expect("test solution must be 5 chars")
     }
 
     #[test]
-    fn test_accepted_guess_rejects_non_word() {
-        let guess = ['z', 'z', 'z', 'z', 'z'];
-        let solution = ['c', 'r', 'a', 'n', 'e'];
-        assert!(!is_accepted_guess(&guess, &solution));
+    fn test_apply_turn_rejects_non_word() {
+        let mut game = game_with_solution("crane");
+        assert_eq!(
+            game.apply_turn("zzzzz\n"),
+            TurnResult::Rejected("Not in word list")
+        );
+        // A rejected guess is never recorded.
+        assert!(game.guessed_words().is_empty());
     }
 
     #[test]
-    fn test_accepted_guess_solution_not_in_dictionary() {
-        // The solution itself is accepted even when it is not a recognised
-        // dictionary word, so a stale word list can never block a win.
-        let solution = ['z', 'z', 'z', 'z', 'z'];
-        assert!(!crate::dictionary::is_valid_word("zzzzz"));
-        assert!(is_accepted_guess(&solution, &solution));
+    fn test_apply_turn_rejects_malformed_input() {
+        let mut game = game_with_solution("crane");
+        assert_eq!(
+            game.apply_turn("abc\n"),
+            TurnResult::Rejected("Please enter a 5-letter word")
+        );
+        assert!(game.guessed_words().is_empty());
+    }
+
+    #[test]
+    fn test_apply_turn_accepts_valid_word() {
+        let mut game = game_with_solution("crane");
+        assert_eq!(game.apply_turn("spell\n"), TurnResult::Accepted);
+        // Exactly one evaluated guess is appended.
+        assert_eq!(game.guessed_words(), vec!["spell".to_string()]);
+        assert!(!game.is_won());
+    }
+
+    #[test]
+    fn test_apply_turn_solution_wins() {
+        let mut game = game_with_solution("crane");
+        assert_eq!(game.apply_turn("crane\n"), TurnResult::GameOver);
+        assert!(game.is_won());
+        assert_eq!(game.guessed_words(), vec!["crane".to_string()]);
+    }
+
+    #[test]
+    fn test_apply_turn_accepts_solution_absent_from_word_lists() {
+        // "zzzzz" is not in answers.txt or allowed.txt, but if NYT ever serves a
+        // solution missing from the bundled (frozen) lists, the player must
+        // still be able to type and win with it. Otherwise the day is unwinnable.
+        assert!(!crate::dictionary::is_allowed_guess("zzzzz"));
+        let mut game = game_with_solution("zzzzz");
+        assert_eq!(game.apply_turn("zzzzz\n"), TurnResult::GameOver);
+        assert!(game.is_won());
+        assert_eq!(game.guessed_words(), vec!["zzzzz".to_string()]);
+    }
+
+    #[test]
+    fn test_apply_turn_six_wrong_guesses_loses() {
+        let mut game = game_with_solution("crane");
+        // Five valid, wrong guesses keep the game in progress.
+        for guess in ["spell", "audio", "ghost", "lucky", "joker"] {
+            assert_eq!(game.apply_turn(guess), TurnResult::Accepted);
+        }
+        assert!(!game.is_won());
+        // The sixth wrong-but-valid guess exhausts the attempts and loses.
+        assert_eq!(game.apply_turn("month"), TurnResult::GameOver);
+        assert!(!game.is_won());
+        assert_eq!(game.guessed_words().len(), MAX_GUESSES);
     }
 }

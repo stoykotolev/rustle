@@ -5,7 +5,7 @@
 //! | Module | Purpose |
 //! |---|---|
 //! | [`celebrate`] | Optional end-of-game effects (confetti, loss sound). |
-//! | [`dictionary`] | Bundled word-list lookup via [`dictionary::is_valid_word`]. |
+//! | [`dictionary`] | Two-list guess validation ([`dictionary::is_allowed_guess`]). |
 //! | [`error`] | Unified error type [`error::RustleError`]. |
 //! | [`feedback`] | Two-pass letter-state evaluation ([`feedback::evaluate`]). |
 //! | [`game`] | Core game loop ([`game::Game`]). |
