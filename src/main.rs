@@ -24,5 +24,8 @@ fn main() {
             std::process::exit(1);
         }
     };
-    game.start_game();
+    let won = game.start_game();
+    if !won {
+        std::process::exit(1);
+    }
 }

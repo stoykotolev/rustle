@@ -4,18 +4,22 @@ use std::process::Command;
 use rodio::{source::Source, Decoder, OutputStream};
 
 use crate::error::RustleError;
+use crate::feedback::LetterState;
 
-type Word = Vec<char>;
+pub const WORD_LEN: usize = 5;
+pub const MAX_GUESSES: usize = 6;
+
+type EvaluatedGuess = ([char; WORD_LEN], [LetterState; WORD_LEN]);
 
 pub struct Game {
-    word: [char; 5],
+    word: [char; WORD_LEN],
     state: GameState,
 }
 
 enum GameState {
-    Won,
-    Lost,
-    InProgress { guesses: Vec<Word> },
+    Won { guesses: Vec<EvaluatedGuess> },
+    Lost { guesses: Vec<EvaluatedGuess> },
+    InProgress { guesses: Vec<EvaluatedGuess> },
 }
 
 impl Game {
@@ -23,9 +27,9 @@ impl Game {
     ///
     /// Returns [`RustleError::InvalidWordLength`] if the word is not exactly
     /// five characters long, guaranteeing the solution can be treated as a
-    /// `[char; 5]` for the rest of the game.
-    pub fn new(word: Word) -> Result<Self, RustleError> {
-        let word: [char; 5] = word
+    /// `[char; WORD_LEN]` for the rest of the game.
+    pub fn new(word: Vec<char>) -> Result<Self, RustleError> {
+        let word: [char; WORD_LEN] = word
             .as_slice()
             .try_into()
             .map_err(|_| RustleError::InvalidWordLength(word.len()))?;
@@ -41,26 +45,35 @@ impl Game {
         self.state = state;
     }
 
-    fn add_guess(&mut self, guess: Word) {
+    fn add_evaluated_guess(&mut self, arr: [char; WORD_LEN], states: [LetterState; WORD_LEN]) {
         if let GameState::InProgress { guesses } = &mut self.state {
-            guesses.push(guess)
+            guesses.push((arr, states));
         }
     }
 
-    pub fn start_game(&mut self) {
+    pub fn start_game(&mut self) -> bool {
         println!("Please enter a 5 letter word: ");
         loop {
-            match &mut self.state {
-                GameState::Won => {
+            match &self.state {
+                GameState::Won { guesses } => {
+                    // Show the completed board, including the winning row, so
+                    // the player sees their final guess colored green.
+                    crate::render::render_board(guesses, &mut io::stdout())
+                        .expect("write to stdout");
                     println!("You are correcto");
                     Command::new("open")
                         .arg("raycast://confetti")
                         .stderr(std::process::Stdio::null())
                         .spawn()
-                        .expect("You should have Raycast... But congratulations I guess. Download Raycast though.");
-                    std::process::exit(1);
+                        .expect("You should have Raycast... But congratulations I guess. Download Raycast though.")
+                        .wait()
+                        .ok();
+                    return true;
                 }
-                GameState::Lost => {
+                GameState::Lost { guesses } => {
+                    // Show the full final board before revealing the answer.
+                    crate::render::render_board(guesses, &mut io::stdout())
+                        .expect("write to stdout");
                     let solution: String = self.word.iter().collect();
                     println!("almost, baka. The word is actually {solution}");
                     // Get a output stream handle to the default physical sound device
@@ -81,41 +94,90 @@ impl Game {
                         .play_raw(source.convert_samples())
                         .expect("Failed to play file");
                     std::thread::sleep(std::time::Duration::from_secs(1));
-                    break;
+                    return false;
                 }
                 GameState::InProgress { guesses } => {
-                    // Handle the loss state
-                    if guesses.len() >= 6 {
-                        self.change_state(GameState::Lost);
-                        continue;
-                    }
+                    // Render the full board before prompting.
+                    crate::render::render_board(guesses, &mut io::stdout())
+                        .expect("write to stdout");
 
                     let mut input_string = String::new();
                     stdin()
                         .read_line(&mut input_string)
                         .expect("Please enter a valid string");
-                    let guess = input_string.trim().chars().collect::<Word>();
 
-                    if guess.len() != 5 {
-                        println!("Please enter a 5 letter word");
-                        continue;
-                    }
-
-                    // Length is validated above, so this conversion cannot panic.
-                    let arr: [char; 5] = guess.as_slice().try_into().expect("guess length is 5");
-
-                    // Handle won state
-                    if arr == self.word {
-                        self.change_state(GameState::Won);
-                        continue;
-                    }
+                    let arr = match parse_guess(&input_string) {
+                        Ok(arr) => arr,
+                        Err(msg) => {
+                            println!("{msg}");
+                            continue;
+                        }
+                    };
 
                     let states = crate::feedback::evaluate(&arr, &self.word);
-                    crate::render::render_guess(&arr, &states, &mut io::stdout())
-                        .expect("write to stdout");
-                    self.add_guess(guess);
+                    self.add_evaluated_guess(arr, states);
+
+                    // Decide the next state based on the just-added guess,
+                    // moving the accumulated guesses into the terminal state.
+                    if let GameState::InProgress { guesses } = &mut self.state {
+                        if arr == self.word {
+                            let guesses = std::mem::take(guesses);
+                            self.change_state(GameState::Won { guesses });
+                        } else if guesses.len() >= MAX_GUESSES {
+                            let guesses = std::mem::take(guesses);
+                            self.change_state(GameState::Lost { guesses });
+                        }
+                    }
                 }
             }
         }
+    }
+}
+
+fn parse_guess(raw: &str) -> Result<[char; WORD_LEN], &'static str> {
+    let lower: String = raw.trim().to_lowercase();
+    let chars: Vec<char> = lower.chars().collect();
+    if chars.len() != WORD_LEN {
+        return Err("Please enter a 5-letter word");
+    }
+    if !chars.iter().all(|c| c.is_ascii_alphabetic()) {
+        return Err("Guess must contain only letters (a-z)");
+    }
+    Ok(chars.try_into().expect("length checked above"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_guess_valid() {
+        assert_eq!(parse_guess("CRANE"), Ok(['c', 'r', 'a', 'n', 'e']));
+    }
+
+    #[test]
+    fn test_parse_guess_digit() {
+        assert_eq!(
+            parse_guess("cr4ne"),
+            Err("Guess must contain only letters (a-z)")
+        );
+    }
+
+    #[test]
+    fn test_parse_guess_special_char() {
+        assert_eq!(
+            parse_guess("cr@ne"),
+            Err("Guess must contain only letters (a-z)")
+        );
+    }
+
+    #[test]
+    fn test_parse_guess_too_long() {
+        assert_eq!(parse_guess("toolong"), Err("Please enter a 5-letter word"));
+    }
+
+    #[test]
+    fn test_parse_guess_too_short() {
+        assert_eq!(parse_guess("abc"), Err("Please enter a 5-letter word"));
     }
 }
