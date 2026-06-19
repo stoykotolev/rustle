@@ -1,27 +1,33 @@
-use chrono::Local;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::error::RustleError;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct WordleData<'a> {
-    pub solution: &'a str,
+#[derive(Deserialize)]
+struct WordleData {
+    solution: String,
 }
 
-pub fn get_data() -> Result<Vec<u8>, RustleError> {
-    let current_date = Local::now().date_naive();
-    let wordle_url = format!("https://www.nytimes.com/svc/wordle/v2/{current_date}.json");
-
-    let resp = reqwest::blocking::get(wordle_url)?.bytes()?;
-
-    Ok(resp.to_vec())
-}
-
-pub fn get_word(bytes: &[u8]) -> Result<WordleData<'_>, RustleError> {
+pub(crate) fn parse_solution(bytes: &[u8]) -> Result<String, RustleError> {
     let data = std::str::from_utf8(bytes)?;
-    let word = serde_json::from_str::<WordleData>(data)?;
+    let WordleData { solution } = serde_json::from_str::<WordleData>(data)?;
+    if solution.is_empty() {
+        return Err(RustleError::EmptySolution);
+    }
+    Ok(solution)
+}
 
-    Ok(word)
+pub fn fetch_solution() -> Result<String, RustleError> {
+    let current_date = chrono::Local::now().date_naive();
+    let url = format!("https://www.nytimes.com/svc/wordle/v2/{current_date}.json");
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()?;
+    let response = client.get(&url).send()?;
+    if !response.status().is_success() {
+        return Err(RustleError::HttpStatus(response.status()));
+    }
+    let bytes = response.bytes()?;
+    parse_solution(&bytes)
 }
 
 #[cfg(test)]
@@ -29,9 +35,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_get_word() {
-        let sample_data = "{\"solution\":\"test\"}";
-        let result = get_word(sample_data.as_bytes()).unwrap();
-        assert_eq!(result.solution, "test");
+    fn parse_valid_solution() {
+        let result = parse_solution(b"{\"solution\":\"tests\"}");
+        assert_eq!(result.unwrap(), "tests");
+    }
+
+    #[test]
+    fn parse_empty_solution() {
+        let result = parse_solution(b"{\"solution\":\"\"}");
+        assert!(matches!(result, Err(RustleError::EmptySolution)));
+    }
+
+    #[test]
+    fn parse_invalid_json() {
+        let result = parse_solution(b"<html>not json</html>");
+        assert!(matches!(result, Err(RustleError::Json(_))));
     }
 }

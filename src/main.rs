@@ -1,23 +1,16 @@
 use strustle::game::Game;
-use strustle::nyt::{get_data, get_word};
+use strustle::nyt::fetch_solution;
 
 fn main() {
-    let bytes = match get_data() {
-        Ok(value) => value,
-        Err(err) => {
-            eprintln!("Error: {err}");
-            std::process::exit(1);
-        }
-    };
-    let word_of_the_day = match get_word(&bytes) {
-        Ok(value) => value.solution.chars().collect::<Vec<char>>(),
+    let solution = match fetch_solution() {
+        Ok(s) => s,
         Err(err) => {
             eprintln!("Error: {err}");
             std::process::exit(1);
         }
     };
 
-    let mut game = match Game::new(word_of_the_day) {
+    let mut game = match Game::new(solution.chars().collect::<Vec<char>>()) {
         Ok(game) => game,
         Err(err) => {
             eprintln!("Error: {err}");
