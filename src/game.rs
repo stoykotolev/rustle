@@ -62,8 +62,8 @@ impl Game {
 
     /// Returns the guessed words in play order as lowercase strings.
     ///
-    /// Reads the accumulated guesses out of whichever [`GameState`] variant the
-    /// game currently holds, so it is valid both mid-game and after the loop has
+    /// Reads the accumulated guesses out of whichever internal state the game
+    /// currently holds, so it is valid both mid-game and after the loop has
     /// reached a terminal state.
     pub fn guessed_words(&self) -> Vec<String> {
         let guesses = match &self.state {
