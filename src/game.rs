@@ -114,6 +114,15 @@ impl Game {
                         }
                     };
 
+                    // The solution is always accepted, even if it is missing
+                    // from the bundled word list (which may be stale relative
+                    // to the live NYT answer). Otherwise the correct guess
+                    // could be rejected and the game made unwinnable.
+                    if !is_accepted_guess(&arr, &self.word) {
+                        println!("Not in word list");
+                        continue;
+                    }
+
                     let states = crate::feedback::evaluate(&arr, &self.word);
                     self.add_evaluated_guess(arr, states);
 
@@ -132,6 +141,19 @@ impl Game {
             }
         }
     }
+}
+
+/// Returns `true` if `guess` may be entered as a guess.
+///
+/// A guess is accepted if it is a recognised word *or* if it exactly matches
+/// the solution. The latter guarantees the correct answer is never blocked by
+/// a stale bundled word list, which would otherwise make the game unwinnable.
+fn is_accepted_guess(guess: &[char; WORD_LEN], solution: &[char; WORD_LEN]) -> bool {
+    if guess == solution {
+        return true;
+    }
+    let word_str: String = guess.iter().collect();
+    crate::dictionary::is_valid_word(&word_str)
 }
 
 fn parse_guess(raw: &str) -> Result<[char; WORD_LEN], &'static str> {
@@ -179,5 +201,28 @@ mod tests {
     #[test]
     fn test_parse_guess_too_short() {
         assert_eq!(parse_guess("abc"), Err("Please enter a 5-letter word"));
+    }
+
+    #[test]
+    fn test_accepted_guess_dictionary_word() {
+        let guess = ['c', 'r', 'a', 'n', 'e'];
+        let solution = ['s', 'p', 'e', 'l', 'l'];
+        assert!(is_accepted_guess(&guess, &solution));
+    }
+
+    #[test]
+    fn test_accepted_guess_rejects_non_word() {
+        let guess = ['z', 'z', 'z', 'z', 'z'];
+        let solution = ['c', 'r', 'a', 'n', 'e'];
+        assert!(!is_accepted_guess(&guess, &solution));
+    }
+
+    #[test]
+    fn test_accepted_guess_solution_not_in_dictionary() {
+        // The solution itself is accepted even when it is not a recognised
+        // dictionary word, so a stale word list can never block a win.
+        let solution = ['z', 'z', 'z', 'z', 'z'];
+        assert!(!crate::dictionary::is_valid_word("zzzzz"));
+        assert!(is_accepted_guess(&solution, &solution));
     }
 }
