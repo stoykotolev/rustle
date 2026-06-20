@@ -1,5 +1,3 @@
-use std::io::{self, stdin};
-
 use crate::error::RustleError;
 use crate::feedback::LetterState;
 
@@ -9,7 +7,9 @@ pub const WORD_LEN: usize = 5;
 /// The maximum number of guesses the player is allowed.
 pub const MAX_GUESSES: usize = 6;
 
-type EvaluatedGuess = ([char; WORD_LEN], [LetterState; WORD_LEN]);
+/// A guess paired with the per-letter evaluation it produced against the
+/// solution. The TUI renders these as the colour-coded board rows.
+pub type EvaluatedGuess = ([char; WORD_LEN], [LetterState; WORD_LEN]);
 
 /// The outcome of applying a single line of player input via [`Game::apply_turn`].
 ///
@@ -60,18 +60,23 @@ impl Game {
         self.state = state;
     }
 
-    /// Returns the guessed words in play order as lowercase strings.
+    /// Returns the evaluated guess rows in play order.
     ///
     /// Reads the accumulated guesses out of whichever internal state the game
-    /// currently holds, so it is valid both mid-game and after the loop has
-    /// reached a terminal state.
-    pub fn guessed_words(&self) -> Vec<String> {
-        let guesses = match &self.state {
+    /// currently holds, so it is valid both mid-game and after a terminal state
+    /// has been reached. The TUI renders these directly as the colour-coded
+    /// board.
+    pub fn evaluated_rows(&self) -> &[EvaluatedGuess] {
+        match &self.state {
             GameState::Won { guesses }
             | GameState::Lost { guesses }
             | GameState::InProgress { guesses } => guesses,
-        };
-        guesses
+        }
+    }
+
+    /// Returns the guessed words in play order as lowercase strings.
+    pub fn guessed_words(&self) -> Vec<String> {
+        self.evaluated_rows()
             .iter()
             .map(|(word, _)| word.iter().collect())
             .collect()
@@ -82,6 +87,12 @@ impl Game {
         matches!(self.state, GameState::Won { .. })
     }
 
+    /// Returns `true` once the game has reached a terminal state (a win or a
+    /// loss), i.e. no further guesses will be accepted.
+    pub fn is_over(&self) -> bool {
+        matches!(self.state, GameState::Won { .. } | GameState::Lost { .. })
+    }
+
     /// Returns the solution word as a lowercase string.
     pub fn solution_string(&self) -> String {
         self.word.iter().collect()
@@ -90,56 +101,6 @@ impl Game {
     fn add_evaluated_guess(&mut self, arr: [char; WORD_LEN], states: [LetterState; WORD_LEN]) {
         if let GameState::InProgress { guesses } = &mut self.state {
             guesses.push((arr, states));
-        }
-    }
-
-    /// Runs the interactive game loop, returning `true` on a win and `false`
-    /// on a loss.
-    ///
-    /// Each iteration renders the board, reads a guess from stdin, validates
-    /// it, and evaluates it against the solution. The loop terminates when the
-    /// player either guesses the word correctly or exhausts all
-    /// [`MAX_GUESSES`] attempts.
-    pub fn start_game(&mut self) -> bool {
-        println!("Please enter a 5 letter word: ");
-        loop {
-            match &self.state {
-                GameState::Won { guesses } => {
-                    // Show the completed board, including the winning row, so
-                    // the player sees their final guess colored green.
-                    crate::render::render_board(guesses, &mut io::stdout())
-                        .expect("write to stdout");
-                    println!("You are correcto");
-                    crate::celebrate::confetti();
-                    return true;
-                }
-                GameState::Lost { guesses } => {
-                    // Show the full final board before revealing the answer.
-                    crate::render::render_board(guesses, &mut io::stdout())
-                        .expect("write to stdout");
-                    let solution: String = self.word.iter().collect();
-                    println!("almost, baka. The word is actually {solution}");
-                    crate::celebrate::play_sad_sound();
-                    return false;
-                }
-                GameState::InProgress { guesses } => {
-                    // Render the full board before prompting.
-                    crate::render::render_board(guesses, &mut io::stdout())
-                        .expect("write to stdout");
-
-                    let mut input_string = String::new();
-                    stdin()
-                        .read_line(&mut input_string)
-                        .expect("Please enter a valid string");
-
-                    // A rejection just prints the reason and re-prompts; an
-                    // accepted guess or game-over falls through to the next loop
-                    // iteration, which renders/handles the new state.
-                    if let TurnResult::Rejected(msg) = self.apply_turn(&input_string) {
-                        println!("{msg}");
-                    }
-                }
-            }
         }
     }
 

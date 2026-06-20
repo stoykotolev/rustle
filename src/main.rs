@@ -1,56 +1,107 @@
 use std::io;
 
+use strustle::cli::{self, CliAction};
 use strustle::game::Game;
 use strustle::nyt::fetch_solution;
-use strustle::persistence::{self, DailyRecord};
-use strustle::render::render_board;
+use strustle::persistence::GameStore;
+use strustle::tui;
 
 fn main() {
+    // Handle `--help`/`--version` before any I/O so they work offline and never
+    // touch the terminal or the save file.
+    match cli::parse_args(std::env::args()) {
+        CliAction::Run => {}
+        CliAction::Help => {
+            println!("{}", cli::help_text());
+            return;
+        }
+        CliAction::Version => {
+            println!("{}", cli::version_line());
+            return;
+        }
+        CliAction::Unknown(arg) => {
+            eprintln!("error: unrecognized argument '{arg}'");
+            eprintln!("Try '{} --help' for usage.", env!("CARGO_PKG_NAME"));
+            std::process::exit(2);
+        }
+    }
+
     // Use the same date source as the NYT client so the saved record lines up
     // with the puzzle that would otherwise be fetched.
     let today = chrono::Local::now().date_naive();
+    let mut store = GameStore::load();
 
-    // If today's game was already finished, replay the saved board and exit
-    // without contacting NYT or starting a new game. A corrupt or missing save
-    // simply yields `None`, falling through to a normal play session.
-    if let Some(played) = persistence::load_today(today) {
-        render_board(&played.rows, &mut io::stdout()).expect("write to stdout");
-        println!("You already played today.");
-        if played.won {
-            println!("You won!");
-        } else {
-            let solution: String = played.solution.iter().collect();
-            println!("You lost. The word was {solution}.");
-            // Mirror the live loss path, which exits non-zero, so replaying a
-            // lost game reports the same exit status to the shell.
+    match run(today, &mut store) {
+        Ok(outcome) => {
+            // Confetti / loss sound run *after* the terminal is restored so they
+            // never interfere with the alternate screen. Replays are read-only:
+            // they never re-trigger effects, but a replayed loss still exits 1.
+            match outcome {
+                Outcome::Won => strustle::celebrate::confetti(),
+                Outcome::Lost => {
+                    strustle::celebrate::play_sad_sound();
+                    std::process::exit(1);
+                }
+                Outcome::Replayed { won: false } => std::process::exit(1),
+                Outcome::Quit | Outcome::Replayed { won: true } => {}
+            }
+        }
+        Err(err) => {
+            // Make sure the terminal is usable before printing the error.
+            let _ = tui::restore();
+            eprintln!("Error: {err}");
             std::process::exit(1);
         }
-        return;
+    }
+}
+
+/// How a session ended, used to pick the right post-game effect and exit code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Outcome {
+    Won,
+    Lost,
+    /// The player quit a fresh game before finishing it.
+    Quit,
+    /// Today was already played; the board was replayed read-only. A lost replay
+    /// still exits non-zero but triggers no effects.
+    Replayed {
+        won: bool,
+    },
+}
+
+/// Orchestrates one launch: replay if already played, otherwise fetch the
+/// solution, run the TUI, and persist the result. The terminal is always
+/// restored before returning.
+fn run(today: chrono::NaiveDate, store: &mut GameStore) -> io::Result<Outcome> {
+    // If today's game is already finished, replay it read-only and exit without
+    // contacting NYT.
+    if let Some(played) = store.played_today(today) {
+        let won = played.won;
+        let mut terminal = tui::init()?;
+        let result = tui::run_replay(&mut terminal, &played, &store.history(), store.stats());
+        tui::restore()?;
+        result?;
+        return Ok(Outcome::Replayed { won });
     }
 
-    let solution = match fetch_solution() {
-        Ok(s) => s,
-        Err(err) => {
-            eprintln!("Error: {err}");
-            std::process::exit(1);
-        }
-    };
+    let solution = fetch_solution().map_err(|err| io::Error::other(err.to_string()))?;
+    let mut game = Game::new(solution.chars().collect::<Vec<char>>())
+        .map_err(|err| io::Error::other(err.to_string()))?;
 
-    let mut game = match Game::new(solution.chars().collect::<Vec<char>>()) {
-        Ok(game) => game,
-        Err(err) => {
-            eprintln!("Error: {err}");
-            std::process::exit(1);
-        }
-    };
-    let won = game.start_game();
+    let history = store.history();
+    let stats = store.stats();
+    let mut terminal = tui::init()?;
+    let result = tui::run_game(&mut terminal, &mut game, &history, stats);
+    tui::restore()?;
+    result?;
 
-    // Persist the completed game (win or loss). Best-effort: a write failure
-    // must never disrupt play, so the result is intentionally ignored.
-    let record = DailyRecord::new(today, game.solution_string(), game.guessed_words(), won);
-    let _ = persistence::save_result(&record);
-
-    if !won {
-        std::process::exit(1);
+    // Only a finished game is persisted; quitting mid-game records nothing so
+    // the player can resume a fresh attempt later that day.
+    if game.is_over() {
+        let won = game.is_won();
+        store.record_today(today, game.solution_string(), game.guessed_words(), won);
+        Ok(if won { Outcome::Won } else { Outcome::Lost })
+    } else {
+        Ok(Outcome::Quit)
     }
 }
