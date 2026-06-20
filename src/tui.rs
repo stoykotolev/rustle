@@ -61,6 +61,7 @@ pub fn run_game(
 ) -> io::Result<()> {
     let mut input = String::new();
     let mut message = String::from("Guess the word!");
+    let mut celebrated = false;
 
     loop {
         let over = game.is_over();
@@ -82,6 +83,18 @@ pub fn run_game(
                 },
             );
         })?;
+
+        // Fire the end-of-game effect exactly once, *after* the final board is
+        // on screen, so the confetti/loss sound lands the moment the game is
+        // won or lost rather than when the player later quits.
+        if over && !celebrated {
+            if game.is_won() {
+                crate::celebrate::confetti();
+            } else {
+                crate::celebrate::play_sad_sound();
+            }
+            celebrated = true;
+        }
 
         let Event::Key(key) = event::read()? else {
             continue;

@@ -70,30 +70,40 @@ fn rank(state: LetterState) -> u8 {
 
 /// Paints the full game screen for `view` into `frame`.
 pub fn draw(frame: &mut Frame, view: &View) {
+    // The content area sits above a one-line footer.
     let root = Layout::vertical([
-        Constraint::Min(0),    // board + side panels
-        Constraint::Length(5), // on-screen keyboard
+        Constraint::Min(0),
         Constraint::Length(1), // footer
     ])
     .split(frame.area());
 
+    // The game is the main window: it takes the flexible space on the left,
+    // while the record (history + streak) sits in a narrower fixed column.
     let content = Layout::horizontal([
-        Constraint::Length(24), // board column
-        Constraint::Min(22),    // history + stats column
+        Constraint::Min(40),    // game (main, flexible)
+        Constraint::Length(26), // record (history + stats)
     ])
     .split(root[0]);
 
+    // The game column stacks the board above the on-screen keyboard.
+    let game = Layout::vertical([
+        Constraint::Min(0),    // board
+        Constraint::Length(5), // keyboard
+    ])
+    .split(content[0]);
+
+    // The record column stacks history above the streak stats.
     let side = Layout::vertical([
-        Constraint::Min(3),    // history
+        Constraint::Min(3),    // history (the smaller window)
         Constraint::Length(4), // stats
     ])
     .split(content[1]);
 
-    draw_board(frame, content[0], view);
+    draw_board(frame, game[0], view);
+    draw_keyboard(frame, game[1], view.rows);
     draw_history(frame, side[0], view.history);
     draw_stats(frame, side[1], view.stats);
-    draw_keyboard(frame, root[1], view.rows);
-    draw_footer(frame, root[2], view.footer);
+    draw_footer(frame, root[1], view.footer);
 }
 
 /// Draws the six-row board plus the status message.

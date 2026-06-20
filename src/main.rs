@@ -33,17 +33,13 @@ fn main() {
 
     match run(today, &mut store) {
         Ok(outcome) => {
-            // Confetti / loss sound run *after* the terminal is restored so they
-            // never interfere with the alternate screen. Replays are read-only:
-            // they never re-trigger effects, but a replayed loss still exits 1.
+            // The confetti / loss sound already fired inside the TUI at the
+            // moment the game ended (a fresh win/loss). Replays are read-only and
+            // trigger no effects. Here we only translate the result into an exit
+            // code: any loss, live or replayed, exits non-zero.
             match outcome {
-                Outcome::Won => strustle::celebrate::confetti(),
-                Outcome::Lost => {
-                    strustle::celebrate::play_sad_sound();
-                    std::process::exit(1);
-                }
-                Outcome::Replayed { won: false } => std::process::exit(1),
-                Outcome::Quit | Outcome::Replayed { won: true } => {}
+                Outcome::Lost | Outcome::Replayed { won: false } => std::process::exit(1),
+                Outcome::Won | Outcome::Quit | Outcome::Replayed { won: true } => {}
             }
         }
         Err(err) => {
